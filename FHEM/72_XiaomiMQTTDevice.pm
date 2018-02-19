@@ -219,7 +219,11 @@ sub onmessage($$$) {
             return;
         }
 
-        readingsSingleUpdate($hash, $path, $message, -1);
+        if($path eq 'battery_level') {
+            readingsSingleUpdate($hash, 'battery', $message > 2200 ? 'ok' : 'low', 1);
+        }
+
+        readingsSingleUpdate($hash, $path, $message, 1);
     }
 
     else {
