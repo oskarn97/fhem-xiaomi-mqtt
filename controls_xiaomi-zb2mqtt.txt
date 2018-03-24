@@ -1,0 +1,2 @@
+DEL ./FHEM/72_XiaomiMQTTDevice.pm
+UPD 2018-02-19_21:43:27 8627 FHEM/72_XiaomiMQTTDevice.pm
