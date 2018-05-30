@@ -99,6 +99,10 @@ sub Define() {
         }
     }
 
+    if(defined($main::attr{$name}{IODev})) {
+        SubscribeReadings($hash);
+    }
+
     return undef;
 };
 
@@ -109,20 +113,24 @@ sub Attr($$$$) {
     my $result = MQTT::DEVICE::Attr($command, $name, $attribute, $value);
 
     if ($attribute eq "IODev") {
-        # Subscribe Readings
-        my ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr(XiaomiMQTT::DEVICE::GetTopicFor($hash));
-        client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
-
-        ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr('xiaomi/'. $hash->{SID}. '/#');
-        client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
-
-        if($hash->{MODEL} eq 'bridge') {
-            ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr("zigbee2mqtt/bridge/log");
-            client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
-        }
+        #SubscribeReadings($hash);
     }
 
     return $result;
+}
+
+sub SubscribeReadings {
+    my ($hash) = @_;
+    my ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr(XiaomiMQTT::DEVICE::GetTopicFor($hash));
+    client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
+
+    ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr('xiaomi/'. $hash->{SID}. '/#');
+    client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
+
+    if($hash->{MODEL} eq 'bridge') {
+        ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr("zigbee2mqtt/bridge/log");
+        client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
+    }
 }
 
 
@@ -207,7 +215,7 @@ sub onmessage($$$) {
                 main::DoTrigger("global", "UNDEFINED XMI_$sid XiaomiMQTTDevice $model $sid");
               } else {
                 my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
-                if($defined->{model} ne $model) {
+                if($defined->{MODEL} ne $model) {
                     fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid);
                 }
               }
@@ -317,6 +325,11 @@ sub Expand {
                 }
                 if($reading eq 'illuminance') {
                     readingsBulkUpdate($hash, 'lux', $value);
+                }
+                if($hash->{MODEL} eq 'WXKG03LM') {
+                    readingsBulkUpdate($hash, 'channel_0', 'click');
+                } elsif($hash->{MODEL} eq 'WXKG02LM') {
+                    readingsBulkUpdate($hash, 'channel_'. ($value eq 'left' ? 0 : ($value eq 'right' ? 1 : 2)), 'click');
                 }
                 if($reading eq 'click') {
                     my $previousValue = $value;
