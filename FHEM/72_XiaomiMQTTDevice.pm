@@ -321,7 +321,8 @@ sub Expand {
                     readingsBulkUpdate($hash, 'state', $value eq "true" ? 'motion' : 'no_motion');
                 }
                 if($reading eq 'contact') {
-                    readingsBulkUpdate($hash, 'state', $value eq "true" ? 'close' : 'open');
+                    my $newVal = $value eq "true" ? 'close' : 'open';
+                    readingsBulkUpdate($hash, 'state', $newVal) if(ReadingsVal($hash->{NAME}, 'state', '') ne $newVal);
                 }
                 if($reading eq 'illuminance') {
                     readingsBulkUpdate($hash, 'lux', $value);
