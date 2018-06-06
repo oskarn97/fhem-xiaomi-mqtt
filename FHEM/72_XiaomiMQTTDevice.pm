@@ -167,11 +167,11 @@ sub Set($$$@) {
     my $msgid;
     my $retain = $hash->{".retain"}->{'*'};
     my $qos = $hash->{".qos"}->{'*'};
+    my $value = join (" ", @values);
+    my $values = @values;
 
     if ($hash->{MODEL} eq "bridge") {
         if($command eq 'pair' || $command eq 'pairForSec') {
-            my $value = join (" ", @values);
-
             $msgid = send_publish($hash->{IODev}, topic => 'zigbee2mqtt/bridge/config/permit_join', message => $value == 0 ? "false" : "true", qos => $qos, retain => $retain);
             $msgid = send_publish($hash->{IODev}, topic => 'xiaomi/cmnd/bridge/pair', message => 220, qos => $qos, retain => $retain); #backwards compatibility
             main::RemoveInternalTimer($hash);
@@ -181,6 +181,12 @@ sub Set($$$@) {
         if ($command eq "updateDevices") {
             updateDevices($hash);
         }
+    } else {
+        if($values == 0) {
+            $value = $command;
+            $command = "state";
+        }
+        $msgid = send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({$command => $value}), qos => $qos, retain => $retain);
     }
 
 
