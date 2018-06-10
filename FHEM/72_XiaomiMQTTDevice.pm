@@ -311,12 +311,12 @@ sub Expand {
         }
     } elsif (ref($ref) eq "HASH") {
         while (my ($key, $value) = each %{$ref}) {
-            if (ref($value) && ref($value) ne "JSON::XS::Boolean") {
+            if (ref($value) && !(ref($value) =~ m/Boolean/)) {
                 XiaomiMQTT::DEVICE::Expand($hash, $value, $prefix . $key . $suffix . "-", "");
             } else {
                 # replace illegal characters in reading names
                 (my $reading = $prefix . $key . $suffix) =~ s/[^A-Za-z\d_\.\-\/]/_/g;
-                if(ref($value) eq "JSON::XS::Boolean") {
+                if(ref($value) =~ m/Boolean/) {
                     $value = $value ? "true" : "false";
                 }
                 if($reading eq 'battery') {
