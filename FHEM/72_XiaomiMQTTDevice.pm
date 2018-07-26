@@ -240,7 +240,7 @@ sub onmessage($$$) {
         }
     }
 
-    if($parts[-1] eq $hash->{SID}) {
+    if($parts[-1] eq $hash->{SID} || $parts[-1] eq $hash->{FRIENDLYNAME}) {
         XiaomiMQTT::DEVICE::Decode($hash, $message);
     } elsif($parts[-2] eq $hash->{SID} && $parts[0] eq "xiaomi") { #backward compatibility, not needed with new fork
         my $path = $parts[-1];
