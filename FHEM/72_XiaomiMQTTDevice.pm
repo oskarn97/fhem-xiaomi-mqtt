@@ -62,12 +62,13 @@ sub Define() {
 
     return "Invalid number of arguments: define <name> XiaomiMQTTDevice <model> [<id>]" if (int(@args) < 1);
 
-    my ($name, $type, $model, $id) = @args;
+    my ($name, $type, $model, $id, $friendlyName) = @args;
 
     $id = 'bridge' if(!defined $id);
 
     $hash->{MODEL} = $model;
     $hash->{SID} = $id;
+    $hash->{FRIENDLYNAME} = $friendlyName;
 
     $hash->{TYPE} = 'MQTT_DEVICE';
     MQTT::Client_Define($hash, $def);
@@ -136,7 +137,7 @@ sub SubscribeReadings {
 
 sub GetTopicFor {
     my ($hash) = @_;
-    return "zigbee2mqtt/" . ($hash->{SID});
+    return "zigbee2mqtt/" . (defined $hash->{FRIENDLYNAME} ? $hash->{FRIENDLYNAME} : $hash->{SID});
 }
 
 sub Undefine($$) {
@@ -221,11 +222,11 @@ sub onmessage($$$) {
               $model = 'unknown' if(!defined $model);
               if (!defined $main::modules{XiaomiMQTTDevice}{defptr}{$sid}) {
                 Log3 $name, 4, "$name: DEV_Parse> UNDEFINED " . $model . " : " .$sid;
-                main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid");
+                main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid". ($sid ne $friendlyName ? " ". $friendlyName : ""));
               } else {
                 my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
-                if($defined->{MODEL} ne $model) {
-                    fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid);
+                if($defined->{MODEL} ne $model || $defined->{FRIENDLYNAME} ne $friendlyName) {
+                    fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid . ($sid ne $friendlyName ? " ". $friendlyName : ""));
                 }
               }
             }
