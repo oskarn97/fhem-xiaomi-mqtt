@@ -214,11 +214,14 @@ sub onmessage($$$) {
         if($json->{type} eq "devices") {
             foreach my $device (@{$json->{message}}) {
               my $sid = $device->{ieeeAddr};
+              my $friendlyName = $device->{friendly_name};
+              $friendlyName = $sid if(!defined $friendlyName);
+              $friendlyName =~ s/ //g;
               my $model = $device->{model};
               $model = 'unknown' if(!defined $model);
               if (!defined $main::modules{XiaomiMQTTDevice}{defptr}{$sid}) {
                 Log3 $name, 4, "$name: DEV_Parse> UNDEFINED " . $model . " : " .$sid;
-                main::DoTrigger("global", "UNDEFINED XMI_$sid XiaomiMQTTDevice $model $sid");
+                main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid");
               } else {
                 my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
                 if($defined->{MODEL} ne $model) {
