@@ -187,7 +187,9 @@ sub Set($$$@) {
             $value = $command;
             $command = "state";
         }
-        $msgid = send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({$command => $value}), qos => $qos, retain => $retain);
+        my $parameters = {$command => $value};
+        $parameters->{state} = "ON" if($command eq "brightness");
+        $msgid = send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json($parameters), qos => $qos, retain => $retain);
     }
 
 
