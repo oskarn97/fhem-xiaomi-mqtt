@@ -158,7 +158,9 @@ sub Set($$$@) {
     	 my $cmdList = "";
 	    if ($hash->{MODEL} eq "bridge") {
 	    	$cmdList = "pair:1,0 updateDevices:noArg";
-	    }
+	    } else {
+            $cmdList = "remove:noArg";
+        }
         return "Unknown argument " . $command . ", choose one of ". $cmdList;
     }
     
@@ -183,13 +185,17 @@ sub Set($$$@) {
             updateDevices($hash);
         }
     } else {
+        if($command eq 'remove') {
+            return send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/remove", message => $hash->{SID}, qos => $qos, retain => $retain);
+        }
+
         if($values == 0) {
             $value = $command;
             $command = "state";
         }
-        my $parameters = {$command => $value};
-        $parameters->{state} = "ON" if($command eq "brightness");
-        $msgid = send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json($parameters), qos => $qos, retain => $retain);
+
+        send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({"state" => "ON"}), qos => $qos, retain => $retain) if($command eq "brightness");
+        $msgid = send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({$command => $value}), qos => $qos, retain => $retain);
     }
 
 
@@ -237,6 +243,13 @@ sub onmessage($$$) {
                 main::CommandSave(undef, undef);
             } elsif($json->{type} eq "device_connected") {
                 updateDevices($hash);
+            } elsif($json->{type} eq "device_removed") {
+                my $sid = $json->{message};
+                my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
+                if(defined $defined) {
+                    fhem('delete '. $defined->{NAME});
+                    main::CommandSave(undef, undef);
+                }
             }
         }
 
