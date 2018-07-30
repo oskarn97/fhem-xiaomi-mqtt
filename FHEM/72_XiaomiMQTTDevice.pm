@@ -129,7 +129,7 @@ sub SubscribeReadings {
     client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
 
     if($hash->{MODEL} eq 'bridge') {
-        ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr("zigbee2mqtt/bridge/log");
+        ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr("zigbee2mqtt/bridge/#");
         client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
     }
 }
@@ -211,35 +211,36 @@ sub onmessage($$$) {
     my @parts = split('/', $topic);
     my $path = $parts[-1];
 
-    if($topic =~ m/bridge\/log/) {
-        my $name = $hash->{NAME};
-        my $json = eval { JSON->new->utf8(0)->decode($message) };
-        if($json->{type} eq "devices") {
-            foreach my $device (@{$json->{message}}) {
-              my $sid = $device->{ieeeAddr};
-              my $friendlyName = $device->{friendly_name};
-              $friendlyName = $sid if(!defined $friendlyName);
-              $friendlyName =~ s/ //g;
-              my $model = $device->{model};
-              $model = 'unknown' if(!defined $model);
-              if (!defined $main::modules{XiaomiMQTTDevice}{defptr}{$sid}) {
-                Log3 $name, 4, "$name: DEV_Parse> UNDEFINED " . $model . " : " .$sid;
-                main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid". ($sid ne $friendlyName ? " ". $friendlyName : ""));
-              } else {
-                my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
-                if($defined->{MODEL} ne $model || $defined->{FRIENDLYNAME} ne $friendlyName) {
-                    fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid . ($sid ne $friendlyName ? " ". $friendlyName : ""));
+    if($parts[-2] eq "bridge") {
+        if($path eq "log") {
+            my $name = $hash->{NAME};
+            my $json = eval { JSON->new->utf8(0)->decode($message) };
+            if($json->{type} eq "devices") {
+                foreach my $device (@{$json->{message}}) {
+                  my $sid = $device->{ieeeAddr};
+                  my $friendlyName = $device->{friendly_name};
+                  $friendlyName = $sid if(!defined $friendlyName);
+                  $friendlyName =~ s/ //g;
+                  my $model = $device->{model};
+                  $model = 'unknown' if(!defined $model);
+                  if (!defined $main::modules{XiaomiMQTTDevice}{defptr}{$sid}) {
+                    Log3 $name, 4, "$name: DEV_Parse> UNDEFINED " . $model . " : " .$sid;
+                    main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid". ($sid ne $friendlyName ? " ". $friendlyName : ""));
+                  } else {
+                    my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
+                    if($defined->{MODEL} ne $model || $defined->{FRIENDLYNAME} ne $friendlyName) {
+                        fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid . ($sid ne $friendlyName ? " ". $friendlyName : ""));
+                    }
+                  }
                 }
-              }
+
+                main::CommandSave(undef, undef);
+            } elsif($json->{type} eq "device_connected") {
+                updateDevices($hash);
             }
-
-            main::CommandSave(undef, undef);
-            return
         }
 
-        if($json->{type} eq "device_connected") {
-            updateDevices($hash);
-        }
+        readingsSingleUpdate($hash, $path, $message, 1);
     }
 
     if($parts[-1] eq $hash->{SID} || $parts[-1] eq $hash->{FRIENDLYNAME}) {
