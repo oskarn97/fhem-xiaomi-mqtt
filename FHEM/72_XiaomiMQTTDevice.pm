@@ -353,12 +353,13 @@ sub Expand {
                 if($reading eq 'illuminance') {
                     readingsBulkUpdate($hash, 'lux', $value);
                 }
-                if($hash->{MODEL} eq 'WXKG03LM') {
-                    readingsBulkUpdate($hash, 'channel_0', 'click');
-                } elsif($hash->{MODEL} eq 'WXKG02LM') {
-                    readingsBulkUpdate($hash, 'channel_'. ($value eq 'left' ? 0 : ($value eq 'right' ? 1 : 2)), 'click');
-                }
+
                 if($reading eq 'click') {
+                    if($hash->{MODEL} eq 'WXKG03LM') {
+                        readingsBulkUpdate($hash, 'channel_0', 'click');
+                    } elsif($hash->{MODEL} eq 'WXKG02LM') {
+                        readingsBulkUpdate($hash, 'channel_'. ($value eq 'left' ? 0 : ($value eq 'right' ? 1 : 2)), 'click');
+                    }
                     my $previousValue = $value;
                     $value = 'click_release' if($value eq 'single');
                     $value = 'double_click' if($value eq 'double');
