@@ -143,6 +143,7 @@ sub updateFriendlyName {
     my $friendlyName = $hash->{FRIENDLYNAME};
 
     if((!defined $friendlyName || $friendlyName ne $name) && !defined $hash->{".renamedFriendly"}) {
+        Log3($name, 3, "Renaming MQTT Topic for " . $name . " from ". $friendlyName . " to ". $name);
         $hash->{".renamedFriendly"} = 1;
         $friendlyName = $hash->{SID} if(!defined $friendlyName);
         publish($hash, 'zigbee2mqtt/bridge/config/rename', encode_json({"old" => $friendlyName, "new" => $name}));
@@ -261,7 +262,7 @@ sub onmessage($$$) {
                     main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid". ($sid ne $friendlyName ? " ". $friendlyName : ""));
                   } else {
                     my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
-                    if($defined->{MODEL} ne $model || $defined->{FRIENDLYNAME} ne $friendlyName) {
+                    if($defined->{MODEL} ne $model || (defined $defined->{FRIENDLYNAME} && $defined->{FRIENDLYNAME} ne $friendlyName)) {
                         client_unsubscribe_topic($defined, XiaomiMQTT::DEVICE::GetTopicFor($defined));
                         fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid . ($sid ne $friendlyName ? " ". $friendlyName : ""));
                     }
