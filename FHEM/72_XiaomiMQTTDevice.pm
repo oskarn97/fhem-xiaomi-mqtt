@@ -110,9 +110,8 @@ sub Define() {
     return "No MQTT IODev found." if(!defined($main::attr{$name}{IODev}));
 
     SubscribeReadings($hash);
-    updateFriendlyName($hash);
 
-    $hash->{'.autoSubscribeExpr'} = /\$a/; #never auto subscribe to anything, prevents log messages
+    $hash->{'.autoSubscribeExpr'} = "\$a"; #never auto subscribe to anything, prevents log messages
     return undef;
 };
 
@@ -141,8 +140,8 @@ sub updateFriendlyName {
 
     my $name = $hash->{NAME};
     my $friendlyName = $hash->{FRIENDLYNAME};
+
     if(!defined $friendlyName || $friendlyName ne $name) {
-        client_unsubscribe_topic($hash, XiaomiMQTT::DEVICE::GetTopicFor($hash));
         $friendlyName = $hash->{SID} if(!defined $friendlyName);
         send_publish($hash->{IODev}, topic => 'zigbee2mqtt/bridge/config/rename', message => encode_json({"old" => $friendlyName, "new" => $name}), qos => 0, retain => 0);
         updateDevices($hash);
@@ -261,6 +260,7 @@ sub onmessage($$$) {
                   } else {
                     my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
                     if($defined->{MODEL} ne $model || $defined->{FRIENDLYNAME} ne $friendlyName) {
+                        client_unsubscribe_topic($defined, XiaomiMQTT::DEVICE::GetTopicFor($defined));
                         fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid . ($sid ne $friendlyName ? " ". $friendlyName : ""));
                     }
                   }
@@ -282,7 +282,7 @@ sub onmessage($$$) {
         readingsSingleUpdate($hash, $path, $message, 1);
     }
 
-    if($parts[-1] eq $hash->{SID} || $parts[-1] eq $hash->{FRIENDLYNAME}) {
+    if($parts[-1] eq $hash->{SID} || (defined $hash->{FRIENDLYNAME} && $parts[-1] eq $hash->{FRIENDLYNAME})) {
         XiaomiMQTT::DEVICE::Decode($hash, $message);
     } elsif($parts[-2] eq $hash->{SID} && $parts[0] eq "xiaomi") { #backward compatibility, not needed with new fork
         my $path = $parts[-1];
