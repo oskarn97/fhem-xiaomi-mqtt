@@ -64,9 +64,8 @@ sub Define() {
     return "Invalid number of arguments: define <name> XiaomiMQTTDevice <model> [<id>]" if (int(@args) < 1);
 
     my ($name, $type, $model, $id, $friendlyName) = @args;
-    $friendlyName = $id if(!defined $friendlyName);
-
     $id = 'bridge' if(!defined $id);
+    $friendlyName = $id if(!defined $friendlyName);
 
     $hash->{MODEL} = $model;
     $hash->{SID} = $id;
