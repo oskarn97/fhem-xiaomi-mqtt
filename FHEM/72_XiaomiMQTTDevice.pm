@@ -64,6 +64,7 @@ sub Define() {
     return "Invalid number of arguments: define <name> XiaomiMQTTDevice <model> [<id>]" if (int(@args) < 1);
 
     my ($name, $type, $model, $id, $friendlyName) = @args;
+    $friendlyName = $id if(!defined $friendlyName);
 
     $id = 'bridge' if(!defined $id);
 
@@ -142,10 +143,9 @@ sub updateFriendlyName {
     my $name = $hash->{NAME};
     my $friendlyName = $hash->{FRIENDLYNAME};
 
-    if(((!defined $friendlyName && $name ne $hash->{SID}) || $friendlyName ne $name) && (!defined $hash->{".renameFriendly"} || $hash->{".renameFriendly"} ne $name)) {
+    if($friendlyName ne $name && (!defined $hash->{".renameFriendly"} || $hash->{".renameFriendly"} ne $name)) {
         Log3($name, 3, "Renaming MQTT Topic for " . $name . " from ". $friendlyName . " to ". $name);
         $hash->{".renameFriendly"} = $name;
-        $friendlyName = $hash->{SID} if(!defined $friendlyName);
         publish($hash, 'zigbee2mqtt/bridge/config/rename', encode_json({"old" => $friendlyName, "new" => $name}));
         updateDevices($hash);
     }
@@ -167,7 +167,7 @@ sub SubscribeReadings {
 
 sub GetTopicFor {
     my ($hash) = @_;
-    return "zigbee2mqtt/" . (defined $hash->{FRIENDLYNAME} ? $hash->{FRIENDLYNAME} : $hash->{SID});
+    return "zigbee2mqtt/" . $hash->{FRIENDLYNAME};
 }
 
 sub Undefine($$) {
@@ -262,7 +262,7 @@ sub onmessage($$$) {
                     main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid". ($sid ne $friendlyName ? " ". $friendlyName : ""));
                   } else {
                     my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
-                    if($defined->{MODEL} ne $model || (defined $defined->{FRIENDLYNAME} && $defined->{FRIENDLYNAME} ne $friendlyName)) {
+                    if($defined->{MODEL} ne $model || $defined->{FRIENDLYNAME} ne $friendlyName) {
                         client_unsubscribe_topic($defined, XiaomiMQTT::DEVICE::GetTopicFor($defined));
                         fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid . ($sid ne $friendlyName ? " ". $friendlyName : ""));
                     }
@@ -285,7 +285,7 @@ sub onmessage($$$) {
         readingsSingleUpdate($hash, $path, $message, 1);
     }
 
-    if($parts[-1] eq $hash->{SID} || (defined $hash->{FRIENDLYNAME} && $parts[-1] eq $hash->{FRIENDLYNAME})) {
+    if($parts[-1] eq $hash->{SID} || ($parts[-1] eq $hash->{FRIENDLYNAME})) {
         XiaomiMQTT::DEVICE::Decode($hash, $message);
         readingsSingleUpdate($main::modules{XiaomiMQTTDevice}{defptr}{"bridge"}, 'transmission-state', 'incoming publish received', 1) if(defined $main::modules{XiaomiMQTTDevice}{defptr}{"bridge"});
     } elsif($parts[-2] eq $hash->{SID} && $parts[0] eq "xiaomi") { #backward compatibility, not needed with new fork
