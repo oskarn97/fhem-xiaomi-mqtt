@@ -142,7 +142,8 @@ sub updateFriendlyName {
     my $name = $hash->{NAME};
     my $friendlyName = $hash->{FRIENDLYNAME};
 
-    if(!defined $friendlyName || $friendlyName ne $name) {
+    if((!defined $friendlyName || $friendlyName ne $name) && !defined $hash->{".renamedFriendly"}) {
+        $hash->{".renamedFriendly"} = 1;
         $friendlyName = $hash->{SID} if(!defined $friendlyName);
         publish($hash, 'zigbee2mqtt/bridge/config/rename', encode_json({"old" => $friendlyName, "new" => $name}));
         updateDevices($hash);
