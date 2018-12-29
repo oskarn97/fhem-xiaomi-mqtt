@@ -110,6 +110,7 @@ sub Define() {
     return "No MQTT IODev found." if(!defined($main::attr{$name}{IODev}));
 
     SubscribeReadings($hash);
+    updateFriendlyName($hash);
 
     $hash->{'.autoSubscribeExpr'} = "\$a"; #never auto subscribe to anything, prevents log messages
     return undef;
@@ -143,7 +144,7 @@ sub updateFriendlyName {
 
     if(!defined $friendlyName || $friendlyName ne $name) {
         $friendlyName = $hash->{SID} if(!defined $friendlyName);
-        send_publish($hash->{IODev}, topic => 'zigbee2mqtt/bridge/config/rename', message => encode_json({"old" => $friendlyName, "new" => $name}), qos => 0, retain => 0);
+        publish($hash, 'zigbee2mqtt/bridge/config/rename', encode_json({"old" => $friendlyName, "new" => $name}));
         updateDevices($hash);
     }
 }
@@ -203,8 +204,8 @@ sub Set($$$@) {
 
     if ($hash->{MODEL} eq "bridge") {
         if($command eq 'pair' || $command eq 'pairForSec') {
-            send_publish($hash->{IODev}, topic => 'zigbee2mqtt/bridge/config/permit_join', message => $value == 0 ? "false" : "true", qos => 0, retain => 0);
-            send_publish($hash->{IODev}, topic => 'xiaomi/cmnd/bridge/pair', message => 220, qos => 0, retain => 0); #backwards compatibility
+            publish($hash, 'zigbee2mqtt/bridge/config/permit_join', $value == 0 ? "false" : "true");
+            publish($hash, 'xiaomi/cmnd/bridge/pair', 220); #backwards compatibility
             main::RemoveInternalTimer($hash);
             main::InternalTimer(main::gettimeofday()+5*60, "XiaomiMQTT::DEVICE::endPairing", $hash, 1);
         }
@@ -214,7 +215,7 @@ sub Set($$$@) {
         }
     } else {
         if($command eq 'remove') {
-            return send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/remove", message => $hash->{SID}, qos => 0, retain => 0);
+            return publish($hash, "zigbee2mqtt/bridge/config/remove", $hash->{SID});
         }
 
         if($values == 0) {
@@ -222,8 +223,8 @@ sub Set($$$@) {
             $command = "state";
         }
 
-        send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({"state" => "ON"}), qos => 0, retain => 0) if($command eq "brightness");
-        send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({$command => $value}), qos => 0, retain => 0);
+        publish($hash, XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", encode_json({"state" => "ON"})) if($command eq "brightness");
+        publish($hash, XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", encode_json({$command => $value}));
     }
 }
 
@@ -404,13 +405,19 @@ sub Expand {
 
 sub updateDevices($) {
     my ($hash) = @_;
-    send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/devices", message => "", qos => 0, retain => 0);
-    send_publish($hash->{IODev}, topic => 'xiaomi/cmnd/bridge/getDevices', message => "", qos => 0, retain => 0); #backwards compatibility
+    publish($hash, "zigbee2mqtt/bridge/config/devices", "");
+    publish($hash, 'xiaomi/cmnd/bridge/getDevices', ""); #backwards compatibility
 }
 
 sub endPairing {
     my ($hash) = @_;
-    my $msgid = send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/permit_join", message => "false", qos => 0, retain => 0); 
+    my $msgid = publish($hash, "zigbee2mqtt/bridge/config/permit_join", "false"); 
+}
+
+sub publish {
+    my ($hash, $topic, $message) = @_;
+    my $msgid = send_publish($hash->{IODev}, topic => $topic, message => $message, qos => 1, retain => 0); 
+    $hash->{message_ids}->{$msgid}++ if(defined $msgid);
 }
 
 1;
