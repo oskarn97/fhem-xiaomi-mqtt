@@ -85,8 +85,15 @@ sub Define() {
         }
         elsif ( $model =~ m/WSDCGQ11LM/) {
             $main::attr{$name}{stateFormat}  = 'temperature °C, humidity %, pressure kPa';
-        } elsif($model =~ m/unknown/) {
-            $main::attr{$name}{stateFormat} = "state";
+        }
+        # OSRAM Smart+ plug
+        elsif ($model =~ m/AB3257001NJ/){ 
+            $main::attr{$name}{stateFormat} =  "state";
+            $main::attr{$name}{webCmd} =  "toggle:on:off";
+            $main::attr{$name}{devStateIcon} =  "ON:on OFF:off";
+        }
+        elsif($model =~ m/unknown/) {
+            $main::attr{$name}{stateFormat} =  "state";
         }
         $hash->{STATE} = "paired";
     }
@@ -158,7 +165,12 @@ sub Set($$$@) {
     	 my $cmdList = "";
 	    if ($hash->{MODEL} eq "bridge") {
 	    	$cmdList = "pair:1,0 updateDevices:noArg";
-	    } else {
+	    } 
+        # OSRAM Smart+ plug
+        elsif ($hash->{MODEL} eq "AB3257001NJ"){
+            $cmdList = "state:on,off remove:noArg";
+        }
+        else {
             $cmdList = "remove:noArg";
         }
         return "Unknown argument " . $command . ", choose one of ". $cmdList;
