@@ -21,6 +21,7 @@ sub XiaomiMQTTDevice_Initialize($) {
     $hash->{AttrFn} = "XiaomiMQTT::DEVICE::Attr";
     $hash->{AttrList} = "IODev qos retain " . $main::readingFnAttributes;
     $hash->{OnMessageFn} = "XiaomiMQTT::DEVICE::onmessage";
+    $hash->{RenameFn} = "XiaomiMQTT::DEVICE::Rename";
 
     main::LoadModule("MQTT");
     main::LoadModule("MQTT_DEVICE");
@@ -86,8 +87,7 @@ sub Define() {
         elsif ( $model =~ m/WSDCGQ11LM/) {
             $main::attr{$name}{stateFormat}  = 'temperature °C, humidity %, pressure kPa';
         }
-        # OSRAM Smart+ plug
-        elsif ($model =~ m/AB3257001NJ/){ 
+        elsif ($model =~ m/AB3257001NJ/){ # OSRAM Smart+ plug
             $main::attr{$name}{stateFormat} =  "state";
             $main::attr{$name}{webCmd} =  "toggle:on:off";
             $main::attr{$name}{devStateIcon} =  "ON:on OFF:off";
@@ -107,10 +107,12 @@ sub Define() {
         }
     }
 
-    if(defined($main::attr{$name}{IODev})) {
-        SubscribeReadings($hash);
-    }
+    return "No MQTT IODev found." if(!defined($main::attr{$name}{IODev}));
 
+    SubscribeReadings($hash);
+    updateFriendlyName($hash);
+
+    $hash->{'.autoSubscribeExpr'} = /\$a/; #never auto subscribe to anything, prevents log messages
     return undef;
 };
 
@@ -127,6 +129,26 @@ sub Attr($$$$) {
     return $result;
 }
 
+sub Rename($$) {
+    my ($old_name, $new_name) = @_;
+    my $hash = $defs{$old_name};
+    updateFriendlyName($hash);
+}
+
+sub updateFriendlyName {
+    my ($hash) = @_;
+    return if($hash->{MODEL} eq 'bridge');
+
+    my $name = $hash->{NAME};
+    my $friendlyName = $hash->{FRIENDLYNAME};
+    if(!defined $friendlyName || $friendlyName ne $name) {
+        client_unsubscribe_topic($hash, XiaomiMQTT::DEVICE::GetTopicFor($hash));
+        $friendlyName = $hash->{SID} if(!defined $friendlyName);
+        send_publish($hash->{IODev}, topic => 'zigbee2mqtt/bridge/config/rename', message => encode_json({"old" => $friendlyName, "new" => $name}), qos => 0, retain => 0);
+        updateDevices($hash);
+    }
+}
+
 sub SubscribeReadings {
     my ($hash) = @_;
     my ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr(XiaomiMQTT::DEVICE::GetTopicFor($hash));
@@ -140,7 +162,6 @@ sub SubscribeReadings {
         client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
     }
 }
-
 
 sub GetTopicFor {
     my ($hash) = @_;
@@ -162,10 +183,10 @@ sub Set($$$@) {
     my ($hash, $name, $command, @values) = @_;
 
     if ($command eq '?') {
-    	 my $cmdList = "";
-	    if ($hash->{MODEL} eq "bridge") {
-	    	$cmdList = "pair:1,0 updateDevices:noArg";
-	    } 
+         my $cmdList = "";
+        if ($hash->{MODEL} eq "bridge") {
+            $cmdList = "pair:1,0 updateDevices:noArg";
+        } 
         # OSRAM Smart+ plug
         elsif ($hash->{MODEL} eq "AB3257001NJ"){
             $cmdList = "state:on,off remove:noArg";
@@ -178,17 +199,13 @@ sub Set($$$@) {
     
     Log3($hash->{NAME}, 5, "set " . $command . " - value: " . join (" ", @values));
 
-
-    my $msgid;
-    my $retain = $hash->{".retain"}->{'*'};
-    my $qos = $hash->{".qos"}->{'*'};
     my $value = join (" ", @values);
     my $values = @values;
 
     if ($hash->{MODEL} eq "bridge") {
         if($command eq 'pair' || $command eq 'pairForSec') {
-            $msgid = send_publish($hash->{IODev}, topic => 'zigbee2mqtt/bridge/config/permit_join', message => $value == 0 ? "false" : "true", qos => $qos, retain => $retain);
-            $msgid = send_publish($hash->{IODev}, topic => 'xiaomi/cmnd/bridge/pair', message => 220, qos => $qos, retain => $retain); #backwards compatibility
+            send_publish($hash->{IODev}, topic => 'zigbee2mqtt/bridge/config/permit_join', message => $value == 0 ? "false" : "true", qos => 0, retain => 0);
+            send_publish($hash->{IODev}, topic => 'xiaomi/cmnd/bridge/pair', message => 220, qos => 0, retain => 0); #backwards compatibility
             main::RemoveInternalTimer($hash);
             main::InternalTimer(main::gettimeofday()+5*60, "XiaomiMQTT::DEVICE::endPairing", $hash, 1);
         }
@@ -198,7 +215,7 @@ sub Set($$$@) {
         }
     } else {
         if($command eq 'remove') {
-            return send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/remove", message => $hash->{SID}, qos => $qos, retain => $retain);
+            return send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/remove", message => $hash->{SID}, qos => 0, retain => 0);
         }
 
         if($values == 0) {
@@ -206,12 +223,9 @@ sub Set($$$@) {
             $command = "state";
         }
 
-        send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({"state" => "ON"}), qos => $qos, retain => $retain) if($command eq "brightness");
-        $msgid = send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({$command => $value}), qos => $qos, retain => $retain);
+        send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({"state" => "ON"}), qos => 0, retain => 0) if($command eq "brightness");
+        send_publish($hash->{IODev}, topic => XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", message => encode_json({$command => $value}), qos => 0, retain => 0);
     }
-
-
-    $hash->{message_ids}->{$msgid}++ if defined $msgid;
 }
 
 sub Get($$$@) {
@@ -304,7 +318,7 @@ sub onmessage($$$) {
 
         readingsSingleUpdate($hash, $path, $message, 1);
     } else {
-      # Forward to "normal" logic
+        # Forward to "normal" logic
         MQTT::DEVICE::onmessage($hash, $topic, $message);
     }
 }
@@ -351,9 +365,11 @@ sub Expand {
                 if(ref($value) =~ m/Boolean/) {
                     $value = $value ? "true" : "false";
                 }
-                if($reading eq 'battery') {
-                    readingsBulkUpdate($hash, 'battery_level', $value);
-                    $value = $value < 80 ? 'low' : 'ok';
+
+                return if($reading eq 'battery');
+
+                if($reading eq 'voltage') {
+                    readingsBulkUpdate($hash, 'battery', $value < 2800 ? 'low' : 'ok');
                 }
                 if($reading eq 'occupancy') {
                     readingsBulkUpdate($hash, 'state', $value eq "true" ? 'motion' : 'no_motion');
@@ -387,18 +403,14 @@ sub Expand {
 }
 
 sub updateDevices($) {
-	my ($hash) = @_;
-    my $retain = $hash->{".retain"}->{'*'};
-    my $qos = $hash->{".qos"}->{'*'};
-    my $msgid = send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/devices", message => "", qos => $qos, retain => $retain);
-    $msgid = send_publish($hash->{IODev}, topic => 'xiaomi/cmnd/bridge/getDevices', message => "", qos => $qos, retain => $retain); #backwards compatibility
+    my ($hash) = @_;
+    send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/devices", message => "", qos => 0, retain => 0);
+    send_publish($hash->{IODev}, topic => 'xiaomi/cmnd/bridge/getDevices', message => "", qos => 0, retain => 0); #backwards compatibility
 }
 
 sub endPairing {
     my ($hash) = @_;
-    my $retain = $hash->{".retain"}->{'*'};
-    my $qos = $hash->{".qos"}->{'*'};
-    my $msgid = send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/permit_join", message => "false", qos => $qos, retain => $retain); 
+    my $msgid = send_publish($hash->{IODev}, topic => "zigbee2mqtt/bridge/config/permit_join", message => "false", qos => 0, retain => 0); 
 }
 
 1;
