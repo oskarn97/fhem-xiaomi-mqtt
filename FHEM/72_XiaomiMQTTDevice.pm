@@ -285,6 +285,7 @@ sub onmessage($$$) {
 
     if($parts[-1] eq $hash->{SID} || (defined $hash->{FRIENDLYNAME} && $parts[-1] eq $hash->{FRIENDLYNAME})) {
         XiaomiMQTT::DEVICE::Decode($hash, $message);
+        readingsSingleUpdate($main::modules{XiaomiMQTTDevice}{defptr}{"bridge"}, 'transmission-state', 'incoming publish received', 1) if(defined $main::modules{XiaomiMQTTDevice}{defptr}{"bridge"});
     } elsif($parts[-2] eq $hash->{SID} && $parts[0] eq "xiaomi") { #backward compatibility, not needed with new fork
         my $path = $parts[-1];
 
