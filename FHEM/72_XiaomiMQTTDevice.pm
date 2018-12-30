@@ -142,7 +142,7 @@ sub updateFriendlyName {
     my $name = $hash->{NAME};
     my $friendlyName = $hash->{FRIENDLYNAME};
 
-    if($friendlyName ne $name && (!defined $hash->{".renameFriendly"} || $hash->{".renameFriendly"} ne $name)) {
+    if($friendlyName ne $name && (!defined $hash->{".renameFriendly"} || $hash->{".renameFriendly"} ne $name) && !($name eq $hash->{SID} && $hash->{SID} ne $friendlyName)) {
         Log3($name, 3, "Renaming MQTT Topic for " . $name . " from ". $friendlyName . " to ". $name);
         $hash->{".renameFriendly"} = $name;
         publish($hash, 'zigbee2mqtt/bridge/config/rename', encode_json({"old" => $friendlyName, "new" => $name}));
