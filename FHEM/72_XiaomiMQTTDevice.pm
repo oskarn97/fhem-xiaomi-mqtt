@@ -256,6 +256,7 @@ sub onmessage($$$) {
                   $friendlyName =~ s/ //g;
                   my $model = $device->{model};
                   $model = 'unknown' if(!defined $model);
+                  $model =~ s/ //g;
                   if (!defined $main::modules{XiaomiMQTTDevice}{defptr}{$sid}) {
                     Log3 $name, 4, "$name: DEV_Parse> UNDEFINED " . $model . " : " .$sid;
                     main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid". ($sid ne $friendlyName ? " ". $friendlyName : ""));
