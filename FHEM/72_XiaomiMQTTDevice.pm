@@ -76,9 +76,13 @@ sub Define() {
     $hash->{TYPE} = $type;
     $main::modules{XiaomiMQTTDevice}{defptr}{$id} = $hash;
 
-    if($hash->{MODEL} eq 'bridge') {
-        main::InternalTimer(main::gettimeofday()+2, "XiaomiMQTT::DEVICE::updateDevices", $hash, 1);
+    if($model eq 'bridge') {
+        main::InternalTimer(main::gettimeofday()+2, "XiaomiMQTT::DEVICE::updateDevices", $hash);
     }
+    elsif ( $model =~ m/ROUTER/ ) {
+    	$hash->{".lastHeartbeat"} = 0;
+    	main::InternalTimer(main::gettimeofday()+80, "XiaomiMQTT::DEVICE::stateTimeout", $hash);
+	}
 
     if (AttrVal($name, "stateFormat", "transmission-state") eq "transmission-state") {
         if ( $model =~ m/WSDCGQ01LM/) {
@@ -104,6 +108,15 @@ sub Define() {
         }
         elsif ( $model =~ m/(MCCGQ11LM|MCCGQ01LM|magnet)/ ) {
             $main::attr{$name}{devStateIcon}  = 'open:fts_door_open@red close:fts_door@green';
+        }
+        elsif ( $model =~ m/ROUTER/ ) {
+        	$main::attr{$name}{devStateIcon}  = 'online:10px-kreis-gruen offline:10px-kreis-rot';
+        }
+    }
+
+    if(!defined($main::attr{$name}{icon})) {
+        if ( $model =~ m/ROUTER/ ) {
+             $main::attr{$name}{icon}  = 'it_wifi';
         }
     }
 
@@ -387,6 +400,12 @@ sub Expand {
                 if($reading eq 'illuminance') {
                     readingsBulkUpdate($hash, 'lux', $value);
                 }
+                if($reading eq 'state' && $hash->{MODEL} =~ m/ROUTER/) {
+                	$reading = 'value';
+                	readingsBulkUpdate($hash, 'state', 'online') if(ReadingsVal($hash->{NAME}, 'state', '') ne 'online');
+                	$hash->{".lastHeartbeat"} = main::gettimeofday();
+                	main::InternalTimer(main::gettimeofday()+80, "XiaomiMQTT::DEVICE::stateTimeout", $hash, 1);
+                }
 
                 if($reading eq 'click') {
                     if($hash->{MODEL} eq 'WXKG03LM') {
@@ -423,6 +442,12 @@ sub publish {
     my ($hash, $topic, $message) = @_;
     my $msgid = send_publish($hash->{IODev}, topic => $topic, message => $message, qos => 1, retain => 0); 
     $hash->{message_ids}->{$msgid}++ if(defined $msgid);
+}
+
+sub stateTimeout {
+	my ($hash) = @_;
+	return if(!($hash->{MODEL} =~ m/ROUTER/) || main::gettimeofday() - $hash->{".lastHeartbeat"} < 60);
+	readingsSingleUpdate($hash, 'state', 'offline', 1);
 }
 
 1;
