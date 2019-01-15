@@ -355,6 +355,19 @@ sub Decode($$) {
     }
 
     readingsBeginUpdate($hash);
+    if($hash->{MODEL} =~ m/ROUTER/ && defined $h->{description} && defined $h->{type} && defined $h->{rssi}) {
+    	my $infos = {description => $h->{description}, type => $h->{type}, rssi => $h->{rssi}};
+    	my (undef, $sid) = split('/', lc($h->{description}), 2);
+    	$sid = 'bridge' if($h->{type} eq 'COORD');
+    	my $dev = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
+    	my $friendlyName = $sid;
+    	$friendlyName = $dev->{FRIENDLYNAME} if(defined $dev);
+    	delete $h->{description};
+    	delete $h->{type};
+    	delete $h->{rssi};
+    	XiaomiMQTT::DEVICE::Expand($hash, $infos, $friendlyName . '_', "");
+    }
+    
     XiaomiMQTT::DEVICE::Expand($hash, $h, "", "");
     readingsEndUpdate($hash, 1);
 
