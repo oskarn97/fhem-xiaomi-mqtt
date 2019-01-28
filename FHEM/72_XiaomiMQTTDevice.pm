@@ -398,10 +398,7 @@ sub Expand {
 
                 if($reading eq 'battery') {
                     $reading = 'battery_level';
-                }
-
-                if($reading eq 'voltage') {
-                    readingsBulkUpdate($hash, 'battery', $value < 2800 ? 'low' : 'ok');
+                    readingsBulkUpdate($hash, 'battery', $value <= 10 ? 'low' : 'ok');
                 }
                 if($reading eq 'occupancy') {
                     readingsBulkUpdate($hash, 'state', $value eq "true" ? 'motion' : 'no_motion');
