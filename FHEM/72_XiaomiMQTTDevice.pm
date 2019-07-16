@@ -229,7 +229,7 @@ sub Set($$$@) {
             return publish($hash, "zigbee2mqtt/bridge/config/remove", $hash->{SID});
         }
 
-        if(grep {$command eq $_} ("on", "off", "toggle",  "1", "0")) {
+        if(grep {lc($command) eq $_} ("on", "off", "toggle",  "1", "0")) {
             $value2 = $value1;
 	    $value1 = $command;
             $command = "state";
