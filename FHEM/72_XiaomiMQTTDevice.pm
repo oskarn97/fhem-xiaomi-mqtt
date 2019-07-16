@@ -194,7 +194,7 @@ sub Undefine($$) {
 }
 
 sub Set($$$@) {
-    my ($hash, $name, $command, @values) = @_;
+    my ($hash, $name, $command, $value1, $value2) = @_;
 
     if ($command eq '?') {
          my $cmdList = "";
@@ -211,14 +211,11 @@ sub Set($$$@) {
         return "Unknown argument " . $command . ", choose one of ". $cmdList;
     }
     
-    Log3($hash->{NAME}, 5, "set " . $command . " - value: " . join (" ", @values));
-
-    my $value = join (" ", @values);
-    my $values = @values;
+    Log3($hash->{NAME}, 5, "set " . $command . " - value: " . $value1 . " " . join (" ", $value2));
 
     if ($hash->{MODEL} eq "bridge") {
         if($command eq 'pair' || $command eq 'pairForSec') {
-            publish($hash, 'zigbee2mqtt/bridge/config/permit_join', $value == 0 ? "false" : "true");
+            publish($hash, 'zigbee2mqtt/bridge/config/permit_join', $value1 == 0 ? "false" : "true");
             publish($hash, 'xiaomi/cmnd/bridge/pair', 220); #backwards compatibility
             main::RemoveInternalTimer($hash);
             main::InternalTimer(main::gettimeofday()+5*60, "XiaomiMQTT::DEVICE::endPairing", $hash, 1);
@@ -232,13 +229,25 @@ sub Set($$$@) {
             return publish($hash, "zigbee2mqtt/bridge/config/remove", $hash->{SID});
         }
 
-        if($values == 0) {
-            $value = $command;
+        if(grep {lc($command) eq $_} ("on", "off", "toggle",  "1", "0")) {
+            $value2 = $value1;
+	    $value1 = $command;
             $command = "state";
-        }
-
-        publish($hash, XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", encode_json({"state" => "ON"})) if($command eq "brightness");
-        publish($hash, XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", encode_json({$command => $value}));
+    	}
+	my $json_cmd = {};
+	if($command eq "color") {
+	    $json_cmd->{$command} = {"hex" => "#" . $value1};	
+	} elsif($command eq "hue") {
+	    $json_cmd->{"color"} = {$command => $value1};
+        } elsif($command eq "saturation") {
+            $json_cmd->{"color"} = {$command => $value1};
+	} else {
+	    $json_cmd->{$command} = $value1;
+	}
+	if(defined $value2) {
+	    $json_cmd->{"transition"} = $value2;
+	}
+	publish($hash, XiaomiMQTT::DEVICE::GetTopicFor($hash) . "/set", encode_json($json_cmd));
     }
 }
 
