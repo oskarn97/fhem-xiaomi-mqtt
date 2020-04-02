@@ -22,6 +22,7 @@ sub XiaomiMQTTDevice_Initialize($) {
     $hash->{AttrList} = "IODev qos retain " . $main::readingFnAttributes;
     $hash->{OnMessageFn} = "XiaomiMQTT::DEVICE::onmessage";
     $hash->{RenameFn} = "XiaomiMQTT::DEVICE::Rename";
+    $hash->{NotifyFn} = "XiaomiMQTT::DEVICE::Notify";
 
     main::LoadModule("MQTT");
     main::LoadModule("MQTT_DEVICE");
@@ -63,13 +64,16 @@ sub Define() {
 
     return "Invalid number of arguments: define <name> XiaomiMQTTDevice <model> [<id>]" if (int(@args) < 1);
 
-    my ($name, $type, $model, $id, $friendlyName) = @args;
-    $id = 'bridge' if(!defined $id);
+    my ($name, $type, $model, $id, $friendlyName, $topic) = @args;
+    $model = 'bridge' if(!defined $model);
     $friendlyName = $id if(!defined $friendlyName);
+    $topic = 'zigbee2mqtt' if(!defined $topic);
+    $topic = $id if($model eq 'bridge');
 
     $hash->{MODEL} = $model;
     $hash->{SID} = $id;
     $hash->{FRIENDLYNAME} = $friendlyName;
+    $hash->{TOPIC} = $topic;
 
     $hash->{TYPE} = 'MQTT_DEVICE';
     MQTT::Client_Define($hash, $def);
@@ -122,12 +126,28 @@ sub Define() {
 
     return "No MQTT IODev found." if(!defined($main::attr{$name}{IODev}));
 
-    SubscribeReadings($hash);
-    updateFriendlyName($hash);
+    $hash->{NOTIFYDEV} = "global";
+    SubscribeReadings($hash) if($main::init_done);
+    updateFriendlyName($hash) if($main::init_done);
 
     $hash->{'.autoSubscribeExpr'} = "\$a"; #never auto subscribe to anything, prevents log messages
     return undef;
 };
+
+sub Notify($$) {
+	my ($own_hash, $dev_hash) = @_;
+	my $ownName = $own_hash->{NAME}; # own name / hash
+ 
+	return "No MQTT IODev found." if(!defined($main::attr{$ownName}{IODev}));
+ 
+	my $devName = $dev_hash->{NAME}; # Device that created the events
+	my $events = main::deviceEvents($dev_hash, 1);
+
+	if($devName eq "global" && grep(m/^INITIALIZED|REREADCFG$/, @{$events})) {
+		SubscribeReadings($own_hash);
+    	updateFriendlyName($own_hash);
+	}
+}
 
 sub Attr($$$$) {
     my ($command, $name, $attribute, $value) = @_;
@@ -148,6 +168,13 @@ sub Rename($$) {
     updateFriendlyName($hash);
 }
 
+sub Topic {
+	my ($hash) = @_;
+	my $topic = $hash->{TOPIC};
+	return $topic if(defined $topic);
+	return "zigbee2mqtt";
+}
+
 sub updateFriendlyName {
     my ($hash) = @_;
     return if($hash->{MODEL} eq 'bridge');
@@ -158,7 +185,7 @@ sub updateFriendlyName {
     if($friendlyName ne $name && (!defined $hash->{".renameFriendly"} || $hash->{".renameFriendly"} ne $name) && !($name eq $hash->{SID} && $hash->{SID} ne $friendlyName)) {
         Log3($name, 3, "Renaming MQTT Topic for " . $name . " from ". $friendlyName . " to ". $name);
         $hash->{".renameFriendly"} = $name;
-        publish($hash, 'zigbee2mqtt/bridge/config/rename', encode_json({"old" => $friendlyName, "new" => $name}));
+        publish($hash, Topic($hash) . '/bridge/config/rename', encode_json({"old" => $friendlyName, "new" => $name}));
         updateDevices($hash);
     }
 }
@@ -172,14 +199,14 @@ sub SubscribeReadings {
     client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
 
     if($hash->{MODEL} eq 'bridge') {
-        ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr("zigbee2mqtt/bridge/#");
+        ($mqos, $mretain, $mtopic, $mvalue, $mcmd) = MQTT::parsePublishCmdStr(Topic($hash) . "/bridge/#");
         client_subscribe_topic($hash, $mtopic, $mqos, $mretain);
     }
 }
 
 sub GetTopicFor {
     my ($hash) = @_;
-    return "zigbee2mqtt/" . $hash->{FRIENDLYNAME};
+    return Topic($hash) . "/" . $hash->{FRIENDLYNAME};
 }
 
 sub Undefine($$) {
@@ -187,7 +214,7 @@ sub Undefine($$) {
 
     client_unsubscribe_topic($hash, XiaomiMQTT::DEVICE::GetTopicFor($hash));
     client_unsubscribe_topic($hash, 'xiaomi/'. $hash->{SID}. '/#');
-    client_unsubscribe_topic($hash, 'zigbee2mqtt/bridge/log') if($hash->{MODEL} eq 'bridge');
+    client_unsubscribe_topic($hash, Topic($hash) . '/bridge/log') if($hash->{MODEL} eq 'bridge');
 
     delete($main::modules{XiaomiMQTTDevice}{defptr}{$hash->{SID}});
     return MQTT::Client_Undefine($hash);
@@ -218,7 +245,7 @@ sub Set($$$@) {
 
     if ($hash->{MODEL} eq "bridge") {
         if($command eq 'pair' || $command eq 'pairForSec') {
-            publish($hash, 'zigbee2mqtt/bridge/config/permit_join', $value == 0 ? "false" : "true");
+            publish($hash, Topic($hash) . '/bridge/config/permit_join', $value == 0 ? "false" : "true");
             publish($hash, 'xiaomi/cmnd/bridge/pair', 220); #backwards compatibility
             main::RemoveInternalTimer($hash);
             main::InternalTimer(main::gettimeofday()+5*60, "XiaomiMQTT::DEVICE::endPairing", $hash, 1);
@@ -229,7 +256,7 @@ sub Set($$$@) {
         }
     } else {
         if($command eq 'remove') {
-            return publish($hash, "zigbee2mqtt/bridge/config/remove", $hash->{SID});
+            return publish($hash, Topic($hash) . "/bridge/config/remove", $hash->{SID});
         }
 
         if($values == 0) {
@@ -272,12 +299,16 @@ sub onmessage($$$) {
                   $model =~ s/ //g;
                   if (!defined $main::modules{XiaomiMQTTDevice}{defptr}{$sid}) {
                     Log3 $name, 4, "$name: DEV_Parse> UNDEFINED " . $model . " : " .$sid;
-                    main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid". ($sid ne $friendlyName ? " ". $friendlyName : ""));
+                    main::DoTrigger("global", "UNDEFINED $friendlyName XiaomiMQTTDevice $model $sid $friendlyName ". $parts[0]);
                   } else {
                     my $defined = $main::modules{XiaomiMQTTDevice}{defptr}{$sid};
-                    if($defined->{MODEL} ne $model || $defined->{FRIENDLYNAME} ne $friendlyName) {
+                    if($defined->{MODEL} ne $model || $defined->{FRIENDLYNAME} ne $friendlyName || $defined->{TOPIC} ne $parts[0]) {
                         client_unsubscribe_topic($defined, XiaomiMQTT::DEVICE::GetTopicFor($defined));
-                        fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid . ($sid ne $friendlyName ? " ". $friendlyName : ""));
+                        fhem('modify '. $defined->{NAME} . ' '. $model . ' '. $sid . ' ' . $friendlyName . ' '. $parts[0]);
+                    }
+                    my $dtopic = $main::attr{$defined->{NAME}}{topic};
+                    if((!defined $dtopic && $parts[0] ne "zigbee2mqtt") || (defined $dtopic && $dtopic ne $parts[0])) {
+                    	$main::attr{$defined->{NAME}}{topic} = $parts[0];
                     }
                   }
                 }
@@ -439,13 +470,13 @@ sub Expand {
 
 sub updateDevices($) {
     my ($hash) = @_;
-    publish($hash, "zigbee2mqtt/bridge/config/devices", "");
+    publish($hash,  Topic($hash) . "/bridge/config/devices", "");
     publish($hash, 'xiaomi/cmnd/bridge/getDevices', ""); #backwards compatibility
 }
 
 sub endPairing {
     my ($hash) = @_;
-    my $msgid = publish($hash, "zigbee2mqtt/bridge/config/permit_join", "false"); 
+    my $msgid = publish($hash, Topic($hash) . "/bridge/config/permit_join", "false"); 
 }
 
 sub publish {
