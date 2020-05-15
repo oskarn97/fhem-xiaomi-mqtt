@@ -93,7 +93,7 @@ sub Define() {
             $main::attr{$name}{stateFormat}  = 'temperature °C, humidity %';
         }
         elsif ( $model =~ m/WSDCGQ11LM/) {
-            $main::attr{$name}{stateFormat}  = 'temperature °C, humidity %, pressure kPa';
+            $main::attr{$name}{stateFormat}  = 'temperature °C, humidity %, pressure hPa';
         }
         elsif ($model =~ m/AB3257001NJ/){ # OSRAM Smart+ plug
             $main::attr{$name}{stateFormat} =  "state";
