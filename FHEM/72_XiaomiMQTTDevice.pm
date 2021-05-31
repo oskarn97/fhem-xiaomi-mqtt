@@ -124,7 +124,7 @@ sub Define() {
         }
     }
 
-    return "No MQTT IODev found." if(!defined($main::attr{$name}{IODev}));
+    return "No MQTT IODev found." if(!defined($hash->{IODev}));
 
     $hash->{NOTIFYDEV} = "global";
     SubscribeReadings($hash) if($main::init_done);
@@ -138,7 +138,7 @@ sub Notify($$) {
 	my ($own_hash, $dev_hash) = @_;
 	my $ownName = $own_hash->{NAME}; # own name / hash
  
-	return "No MQTT IODev found." if(!defined($main::attr{$ownName}{IODev}));
+	return "No MQTT IODev found." if(!defined($own_hash->{IODev}));
  
 	my $devName = $dev_hash->{NAME}; # Device that created the events
 	my $events = main::deviceEvents($dev_hash, 1);
